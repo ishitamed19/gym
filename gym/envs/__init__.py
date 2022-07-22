@@ -89,6 +89,13 @@ register(
     reward_threshold=900,
 )
 
+register(
+    id="CarRacing-Bezier-v2",
+    entry_point="gym.envs.box2d.car_racing_bezier:CarRacingBezier",
+    max_episode_steps=1000,
+    reward_threshold=900,
+)
+
 # Toy Text
 # ----------------------------------------
 

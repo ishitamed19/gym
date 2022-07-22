@@ -9,7 +9,7 @@ if sys.platform.startswith('linux'):
     display = pyvirtualdisplay.Display(visible=0, size=(1400, 900), color_depth=24)
     display.start()
 
-env = gym.make('CarRacing-v2', birdseye=True)
+env = gym.make('CarRacing-Bezier-v2', birdseye=True)
 
 try:
     env.reset_random()
