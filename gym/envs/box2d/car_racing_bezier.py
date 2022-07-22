@@ -9,7 +9,7 @@ import gym
 from gym import spaces
 from gym.envs.box2d.car_dynamics import Car
 from gym.error import DependencyNotInstalled, InvalidAction
-from gym.utils import EzPickle
+from gym.utils import seeding, EzPickle
 from gym.utils.renderer import Renderer
 from gym.utils import geo_complexity
 
@@ -228,6 +228,19 @@ class CarRacingBezier(gym.Env, EzPickle):
         domain_randomize: bool = False,
         continuous: bool = True,
         birdseye: bool = False,
+        n_control_points: int = 12,
+        track_name: Optional[str] = None,
+        bezier: bool = True, 
+        show_borders: bool = True, 
+        show_indicators: bool = True,
+        seed: Optional[int] = None,
+        fixed_environment: bool = False,
+        animate_zoom: bool = False,
+        min_rad_ratio: float = 0.333333333,
+        max_rad_ratio: float = 1.0,
+        sparse_rewards: bool = False,
+        clip_reward: Optional[int] = None,
+        num_goal_bins: int = 24,
     ):
         EzPickle.__init__(self)
         self.continuous = continuous
@@ -235,8 +248,16 @@ class CarRacingBezier(gym.Env, EzPickle):
         self._init_colors()
 
         self.birdseye = birdseye
-        self.playfield = PLAYFIELD
-        self.full_zoom = 0.25
+        self.level_seed = seed
+        self.seed(seed)
+        
+        self.n_control_points = n_control_points
+        self.bezier = bezier
+        self.fixed_environment = fixed_environment
+        self.animate_zoom = animate_zoom
+        self.min_rad_ratio = min_rad_ratio
+        self.max_rad_ratio = max_rad_ratio
+        self.steps = 0
 
         self.contactListener_keepref = FrictionDetector(self, lap_complete_percent)
         self.world = Box2D.b2World((0, 0), contactListener=self.contactListener_keepref)
@@ -256,6 +277,23 @@ class CarRacingBezier(gym.Env, EzPickle):
             shape=polygonShape(vertices=[(0, 0), (1, 0), (1, -1), (0, -1)])
         )
 
+        self.preloaded_track = racetracks.get_track(track_name)
+        self.show_borders = show_borders
+        self.show_indicators = show_indicators
+
+        self.track_data = None
+        self.complexity_info = None
+        self.window_h = WINDOW_H
+        self.window_w = WINDOW_W
+        self.track_rad = TRACK_RAD
+        self.track_width = TRACK_WIDTH
+        if self.preloaded_track:
+            self.playfield = self.preloaded_track.bounds / SCALE
+            self.full_zoom = self.preloaded_track.full_zoom
+        else:
+            self.playfield = PLAYFIELD
+            self.full_zoom = 0.25
+
         # This will throw a warning in tests/envs/test_envs in utils/env_checker.py as the space is not symmetric
         #   or normalised however this is not possible here so ignore
         if self.continuous:
@@ -274,14 +312,48 @@ class CarRacingBezier(gym.Env, EzPickle):
         self.render_mode = render_mode
         self.renderer = Renderer(self.render_mode, self._render)
 
+        self.clip_reward = clip_reward
+        # Create goal for sparse rewards
+        self.sparse_rewards = sparse_rewards
+        self.num_goal_bins = num_goal_bins # 0-indexed
+        self.goal_bin = None
+        if sparse_rewards:
+            self.set_goal()
+            self.accumulated_rewards = 0.0
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+    def get_complexity_info(self):
+        if self.complexity_info is None:
+            # recompute
+            points = ((x,y) for _,_,x,y in self.track)
+            return geo_complexity.complexity(points)
+        return self.complexity_info
+    
+    def set_goal(self, goal_bin=None):
+        if goal_bin is None:
+            goal_bin = self.goal_bin
+        if goal_bin is None:
+            self.goal_bin = self.np_random.randint(1,self.num_goal_bins)
+            # self.goal_bin = 10
+            # print('set goal to', self.goal_bin)
+        else:
+            self.goal_bin = goal_bin
+        self.goal_reached = False
+        # print(f'goal bin set to {self.goal_bin}', flush=True)
+
     def _destroy(self):
         if not self.road:
             return
         for t in self.road:
+            t.userData = t.userData['tile']
             self.world.DestroyBody(t)
         self.road = []
         assert self.car is not None
         self.car.destroy()
+        self.car = None
 
     def _init_colors(self):
         if self.domain_randomize:
