@@ -108,8 +108,8 @@ class FrictionDetector(contactListener):
                 ):
                     self.env.new_lap = True
 
-                if self.env.sparse_rewards and index >= 0:
-                    self._eval_tile_index(index)
+            if self.env.sparse_rewards and index >= 0:
+                self._eval_tile_index(index)
         else:
             obj.tiles.remove(tile)
 
