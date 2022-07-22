@@ -11,6 +11,7 @@ from gym.envs.box2d.car_dynamics import Car
 from gym.error import DependencyNotInstalled, InvalidAction
 from gym.utils import EzPickle
 from gym.utils.renderer import Renderer
+from gym.utils import geo_complexity
 
 try:
     import Box2D
@@ -28,6 +29,8 @@ except ImportError:
         "pygame is not installed, run `pip install gym[box2d]`"
     )
 
+from . import bezier
+from . import racetracks
 
 STATE_W = 96  # less than Atari 160x192
 STATE_H = 96
@@ -72,12 +75,17 @@ class FrictionDetector(contactListener):
         obj = None
         u1 = contact.fixtureA.body.userData
         u2 = contact.fixtureB.body.userData
-        if u1 and "road_friction" in u1.__dict__:
-            tile = u1
-            obj = u2
-        if u2 and "road_friction" in u2.__dict__:
-            tile = u2
-            obj = u1
+        index = -1
+        if u1 and "tile" in u1:
+            if "road_friction" in u1['tile'].__dict__:
+                tile = u1['tile']
+                index = u1['index']
+                obj = u2
+        if u2 and "tile" in u2:
+            if "road_friction" in u2['tile'].__dict__:
+                tile = u2['tile']
+                index = u2['index']
+                obj = u1
         if not tile:
             return
 
@@ -99,8 +107,28 @@ class FrictionDetector(contactListener):
                     > self.lap_complete_percent
                 ):
                     self.env.new_lap = True
+
+                if self.env.sparse_rewards and index >= 0:
+                    self._eval_tile_index(index)
         else:
             obj.tiles.remove(tile)
+
+    def _eval_tile_index(self, index):
+        goal_bin = self.env.goal_bin
+        track_len = len(self.env.track)
+        goal_step = track_len/(self.env.num_goal_bins)
+        MIN_DISTANCE_TO_GO = 10
+        distance = track_len - index
+        tile_bin = np.floor(distance/goal_step)
+        # print('in tile bin, index', tile_bin, index, flush=True)
+        if goal_bin == 0 and distance < MIN_DISTANCE_TO_GO:
+            self.env.goal_reached = False
+        elif goal_bin == self.env.num_goal_bins - 1 \
+            and index < MIN_DISTANCE_TO_GO:
+            self.env.goal_reached = False
+        elif tile_bin == goal_bin:
+            self.env.goal_reached = True
+            # print(f'goal bin {goal_bin} reached!', flush=True)
 
 
 class CarRacingBezier(gym.Env, EzPickle):
