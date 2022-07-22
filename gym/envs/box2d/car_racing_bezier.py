@@ -103,7 +103,7 @@ class FrictionDetector(contactListener):
             obj.tiles.remove(tile)
 
 
-class CarRacing(gym.Env, EzPickle):
+class CarRacingBezier(gym.Env, EzPickle):
     """
     ### Description
     The easiest control task to learn from pixels - a top-down
@@ -806,7 +806,7 @@ if __name__ == "__main__":
                 if event.key == pygame.K_DOWN:
                     a[2] = 0
 
-    env = CarRacing()
+    env = CarRacingBezier()
     env.render()
 
     isopen = True
