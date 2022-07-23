@@ -783,6 +783,8 @@ class CarRacingBezier(gym.Env, EzPickle):
         if self.fixed_environment:
             self.seed(self.level_seed)
 
+        print("In bezier reset")
+
         self._destroy()
         self.reward = 0.0
         self.prev_reward = 0.0
@@ -841,8 +843,9 @@ class CarRacingBezier(gym.Env, EzPickle):
         self.state = self._render("single_state_pixels")
 
         step_reward = 0
-        terminated = False
-        truncated = False
+        # terminated = False
+        # truncated = False
+        done = False
         if action is not None:  # First step without action, called from reset()
             self.reward -= 0.1
             # We actually don't want to count fuel spent, we want car to be faster.
@@ -854,10 +857,12 @@ class CarRacingBezier(gym.Env, EzPickle):
                 # Truncation due to finishing lap
                 # This should not be treated as a failure
                 # but like a timeout
-                truncated = True
+                # truncated = True
+                done = True
             x, y = self.car.hull.position
             if abs(x) > self.playfield or abs(y) > self.playfield:
-                terminated = True
+                # terminated = True
+                done = True
                 step_reward = -100
 
         if self.sparse_rewards:
@@ -866,14 +871,15 @@ class CarRacingBezier(gym.Env, EzPickle):
             if self.goal_reached:
                 revealed_reward = self.accumulated_rewards
                 self.accumulated_rewards = 0.0
-                truncated = True
+                # truncated = True
+                done = True
         else:
             revealed_reward = step_reward
         if self.clip_reward:
             revealed_reward = min(max(revealed_reward, -self.clip_reward), self.clip_reward)
 
         self.renderer.render_step()
-        return self.state, revealed_reward, terminated, truncated, {}
+        return self.state, revealed_reward, done, {} # terminated, truncated, {}
 
     def render(self, mode: str = "human"):
         if self.render_mode is not None:

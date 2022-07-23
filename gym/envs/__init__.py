@@ -96,6 +96,13 @@ register(
     reward_threshold=900,
 )
 
+register(
+    id="CarRacing-Adversarial-v2",
+    entry_point="gym.envs.box2d.car_racing_adversarial:CarRacingBezierAdversarial",
+    max_episode_steps=1000,
+    reward_threshold=900,
+)
+
 # Toy Text
 # ----------------------------------------
 
