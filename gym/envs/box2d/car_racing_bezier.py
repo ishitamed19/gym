@@ -386,6 +386,147 @@ class CarRacingBezier(gym.Env, EzPickle):
             idx = self.np_random.integers(3)
             self.grass_color[idx] += 20
 
+    def _create_track_bezier(self, control_points=None, show_borders=None):
+        if show_borders is None:
+            show_borders = self.show_borders
+        else:
+            show_borders = show_borders
+
+        # Create random bezier curve
+        track = []
+        self.road = []
+
+        if self.preloaded_track is not None:
+            points = self.preloaded_track.xy
+            x,y = zip(*points)
+        elif control_points is not None:
+            a = np.array(control_points)
+            x, y, _ = bezier.get_bezier_curve(a=a, rad=0.2, edgy=0.2, numpoints=40)
+            self.track_data = a
+        else:
+            a = bezier.get_random_points(n=self.n_control_points, scale=self.playfield, np_random=self.np_random)
+            x, y, _ = bezier.get_bezier_curve(a=a, rad=0.2, edgy=0.2, numpoints=40)
+            self.track_data = a
+
+        min_x, max_x = x[-1], x[-1]
+        min_y, max_y = y[-1], y[-1]
+
+        points = list(zip(x,y))
+        betas = []
+        for i, p in enumerate(points[:-1]):
+            x1, y1 = points[i]
+            x2, y2 = points[i+1]
+            dx = x2 - x1
+            dy = y2 - y1
+            if (dx == dy == 0):
+                continue
+
+            # alpha = math.atan(dy/(dx+1e-5))
+            alpha = np.arctan2(dy, dx)
+            beta = math.pi/2 + alpha
+
+            track.append((alpha, beta, x1, y1))
+            betas.append(beta)
+
+            min_x = min(x1, min_x)
+            min_y = min(y1, min_y)
+            max_x = max(x1, max_x)
+            max_y = max(y1, max_y)
+
+        x_offset = min_x + (max_x - min_x)/2
+        y_offset = min_y + (max_y - min_y)/2
+        self.x_offset = x_offset
+        self.y_offset = y_offset
+
+        betas = np.array(betas)
+        abs_dbeta = abs(betas[1:] - betas[0:-1])
+        mean_abs_dbeta = abs_dbeta.mean()
+        std_abs_dbeta = abs_dbeta.std()
+        one_dev_dbeta = mean_abs_dbeta + std_abs_dbeta/2
+
+        # Red-white border on hard turns
+        border = [False] * len(track)
+        if show_borders:
+            for i in range(len(track)):
+                good = True
+                oneside = 0
+                for neg in range(BORDER_MIN_COUNT):
+                    beta1 = track[i - neg - 0][1]
+                    beta2 = track[i - neg - 1][1]
+                    good &= abs(beta1 - beta2) > mean_abs_dbeta #TRACK_TURN_RATE * 0.2
+                    oneside += np.sign(beta1 - beta2)
+                good &= abs(oneside) == BORDER_MIN_COUNT
+                border[i] = good
+            for i in range(len(track)):
+                for neg in range(BORDER_MIN_COUNT):
+                    border[i - neg] |= border[i]
+
+        # Create tiles
+        for i in range(len(track)):
+            alpha1, beta1, x1, y1 = track[i]
+            alpha2, beta2, x2, y2 = track[i - 1]
+            road1_l = (
+                x1 - TRACK_WIDTH * math.cos(beta1) - x_offset,
+                y1 - TRACK_WIDTH * math.sin(beta1) - y_offset,
+            )
+            road1_r = (
+                x1 + TRACK_WIDTH * math.cos(beta1) - x_offset,
+                y1 + TRACK_WIDTH * math.sin(beta1) - y_offset,
+            )
+            road2_l = (
+                x2 - TRACK_WIDTH * math.cos(beta2) - x_offset,
+                y2 - TRACK_WIDTH * math.sin(beta2) - y_offset,
+            )
+            road2_r = (
+                x2 + TRACK_WIDTH * math.cos(beta2) - x_offset,
+                y2 + TRACK_WIDTH * math.sin(beta2) - y_offset,
+            )
+            vertices = [road1_l, road1_r, road2_r, road2_l]
+            try:
+                self.fd_tile.shape.vertices = vertices
+            except:
+                pass
+            t = self.world.CreateStaticBody(fixtures=self.fd_tile)
+            t.userData = {
+                'tile': t,
+                'index': i
+            }
+            c = 0.01 * (i % 3) * 255
+            t.color = self.road_color + c
+            t.road_visited = False
+            t.road_friction = 1.0
+            t.idx = i
+            t.fixtures[0].sensor = True
+            self.road_poly.append(([road1_l, road1_r, road2_r, road2_l], t.color))
+            self.road.append(t)
+            if self.show_borders and border[i]:
+                side = np.sign(beta2 - beta1)
+                b1_l = (
+                    x1 + side * TRACK_WIDTH * math.cos(beta1) - x_offset,
+                    y1 + side * TRACK_WIDTH * math.sin(beta1) - y_offset,
+                )
+                b1_r = (
+                    x1 + side * (TRACK_WIDTH + BORDER) * math.cos(beta1) - x_offset,
+                    y1 + side * (TRACK_WIDTH + BORDER) * math.sin(beta1) - y_offset,
+                )
+                b2_l = (
+                    x2 + side * TRACK_WIDTH * math.cos(beta2) - x_offset,
+                    y2 + side * TRACK_WIDTH * math.sin(beta2) - y_offset,
+                )
+                b2_r = (
+                    x2 + side * (TRACK_WIDTH + BORDER) * math.cos(beta2) - x_offset,
+                    y2 + side * (TRACK_WIDTH + BORDER) * math.sin(beta2) - y_offset,
+                )
+                self.road_poly.append(
+                    (
+                        [b1_l, b1_r, b2_r, b2_l],
+                        (255, 255, 255) if i % 2 == 0 else (255, 0, 0),
+                    )
+                )
+        self.track = track
+        self.complexity_info = geo_complexity.complexity(points)
+        return True
+
     def _create_track_polar(self, control_points=None, show_borders=None):
         if show_borders is None:
             show_borders = self.show_borders
@@ -594,6 +735,11 @@ class CarRacingBezier(gym.Env, EzPickle):
                 )
         self.track = track
         return True
+
+    def reset_sparse_state(self):
+        if self.sparse_rewards:
+            self.accumulated_rewards = 0.0
+            self.set_goal()
 
     def reset(
         self,
