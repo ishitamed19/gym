@@ -778,7 +778,7 @@ class CarRacingBezier(gym.Env, EzPickle):
 
         self.goal_bin = None
         self.reset_sparse_state()
-        
+
         self.renderer.reset()
         if not return_info:
             return self.step(None)[0]
@@ -805,6 +805,7 @@ class CarRacingBezier(gym.Env, EzPickle):
         self.car.step(1.0 / FPS)
         self.world.Step(1.0 / FPS, 6 * 30, 2 * 30)
         self.t += 1.0 / FPS
+        self.steps += 1
 
         self.state = self._render("single_state_pixels")
 
@@ -824,12 +825,24 @@ class CarRacingBezier(gym.Env, EzPickle):
                 # but like a timeout
                 truncated = True
             x, y = self.car.hull.position
-            if abs(x) > PLAYFIELD or abs(y) > PLAYFIELD:
+            if abs(x) > self.playfield or abs(y) > self.playfield:
                 terminated = True
                 step_reward = -100
 
+        if self.sparse_rewards:
+            self.accumulated_rewards += step_reward
+            revealed_reward = 0
+            if self.goal_reached:
+                revealed_reward = self.accumulated_rewards
+                self.accumulated_rewards = 0.0
+                truncated = True
+        else:
+            revealed_reward = step_reward
+        if self.clip_reward:
+            revealed_reward = min(max(revealed_reward, -self.clip_reward), self.clip_reward)
+
         self.renderer.render_step()
-        return self.state, step_reward, terminated, truncated, {}
+        return self.state, revealed_reward, terminated, truncated, {}
 
     def render(self, mode: str = "human"):
         if self.render_mode is not None:
