@@ -216,6 +216,8 @@ class CarRacingBezier(gym.Env, EzPickle):
             "state_pixels",
             "single_rgb_array",
             "single_state_pixels",
+            "levels",
+            "sketch"
         ],
         "render_fps": FPS,
     }
@@ -385,6 +387,35 @@ class CarRacingBezier(gym.Env, EzPickle):
             self.grass_color = np.copy(self.bg_color)
             idx = self.np_random.integers(3)
             self.grass_color[idx] += 20
+
+    def _create_track(self, control_points=None, show_borders=None):
+        if self.bezier:
+            return self._create_track_bezier(
+                control_points=control_points, 
+                show_borders=show_borders)
+        else:
+            t = 0
+            reset_random = False
+            while True:
+                t += 1
+                if t > 10:
+                    reset_random = True
+                    break
+
+                success = self._create_track_polar(
+                    control_points=control_points,
+                    show_borders=show_borders)
+                if success:
+                    return success
+
+        if reset_random:
+            t = 0
+            while True:
+                t += 1
+                success = self._create_track_polar(
+                    show_borders=show_borders)
+                if success:
+                    return success
 
     def _create_track_bezier(self, control_points=None, show_borders=None):
         if show_borders is None:
@@ -870,13 +901,15 @@ class CarRacingBezier(gym.Env, EzPickle):
         # computing transformations
         angle = -self.car.hull.angle
         # Animating first second zoom.
-        if self.birdseye:
+        if self.birdseye or mode in ['level, sketch']:
             angle = 0
             zoom_coef = self.full_zoom
         else:
             zoom_coef = ZOOM
-        # zoom = 0.1 * SCALE * max(1 - self.t, 0) + ZOOM * SCALE * min(self.t, 1)
-        zoom = zoom_coef * SCALE
+        if self.animate_zoom:
+            zoom = 0.1 * SCALE * max(1 - self.t, 0) + ZOOM * SCALE * min(self.t, 1)
+        else:
+            zoom = zoom_coef * SCALE
         scroll_x = -(self.car.hull.position[0]) * zoom
         scroll_y = -(self.car.hull.position[1]) * zoom
         if self.birdseye:
@@ -897,13 +930,14 @@ class CarRacingBezier(gym.Env, EzPickle):
         self.surf = pygame.transform.flip(self.surf, False, True)
 
         # showing stats
-        self._render_indicators(WINDOW_W, WINDOW_H)
+        if mode not in ['level', 'sketch'] and self.show_indicators:
+            self._render_indicators(WINDOW_W, WINDOW_H)
 
-        font = pygame.font.Font(pygame.font.get_default_font(), 42)
-        text = font.render("%04i" % self.reward, True, (255, 255, 255), (0, 0, 0))
-        text_rect = text.get_rect()
-        text_rect.center = (60, WINDOW_H - WINDOW_H * 2.5 / 40.0)
-        self.surf.blit(text, text_rect)
+            font = pygame.font.Font(pygame.font.get_default_font(), 42)
+            text = font.render("%04i" % self.reward, True, (255, 255, 255), (0, 0, 0))
+            text_rect = text.get_rect()
+            text_rect.center = (60, WINDOW_H - WINDOW_H * 2.5 / 40.0)
+            self.surf.blit(text, text_rect)
 
         if mode == "human":
             pygame.event.pump()
@@ -915,13 +949,13 @@ class CarRacingBezier(gym.Env, EzPickle):
 
         if mode in {"rgb_array", "single_rgb_array"}:
             return self._create_image_array(self.surf, (VIDEO_W, VIDEO_H))
-        elif mode in {"state_pixels", "single_state_pixels"}:
+        elif mode in {"state_pixels", "single_state_pixels", "sketch"}:
             return self._create_image_array(self.surf, (STATE_W, STATE_H))
         else:
             return self.isopen
 
     def _render_road(self, zoom, translation, angle):
-        bounds = PLAYFIELD
+        bounds = self.playfield #PLAYFIELD
         field = [
             (bounds, bounds),
             (bounds, -bounds),
@@ -935,15 +969,16 @@ class CarRacingBezier(gym.Env, EzPickle):
         )
 
         # draw grass patches
+        grass_dim_bound = self.playfield / 20.0
         grass = []
         for x in range(-20, 20, 2):
             for y in range(-20, 20, 2):
                 grass.append(
                     [
-                        (GRASS_DIM * x + GRASS_DIM, GRASS_DIM * y + 0),
-                        (GRASS_DIM * x + 0, GRASS_DIM * y + 0),
-                        (GRASS_DIM * x + 0, GRASS_DIM * y + GRASS_DIM),
-                        (GRASS_DIM * x + GRASS_DIM, GRASS_DIM * y + GRASS_DIM),
+                        (grass_dim_bound * x + grass_dim_bound, grass_dim_bound * y + 0),
+                        (grass_dim_bound * x + 0, grass_dim_bound * y + 0),
+                        (grass_dim_bound * x + 0, grass_dim_bound * y + grass_dim_bound),
+                        (grass_dim_bound * x + grass_dim_bound, grass_dim_bound * y + grass_dim_bound),
                     ]
                 )
         for poly in grass:

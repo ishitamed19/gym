@@ -17,7 +17,7 @@ except:
     print("trying reset() instead of reset_random()")
     env.reset()
 for _ in range(1000):
-    env.render()
+    env.render(mode="human")
     action = env.action_space.sample()
     observation, reward, done, info = env.step(action)
     if done or (_%200==0):
