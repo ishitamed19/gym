@@ -1073,6 +1073,13 @@ class CarRacingBezier(gym.Env, EzPickle):
         # we simply check if the polygon is in a larger bounding box whose dimension
         # is greater than the screen by MAX_SHAPE_DIM, which is the maximum
         # diagonal length of an environment object
+        if self.birdseye:
+            zoom_coef = self.full_zoom
+        else:
+            zoom_coef = ZOOM
+        MAX_SHAPE_DIM = (
+            max(self.playfield/20.0, TRACK_WIDTH, TRACK_DETAIL_STEP) * math.sqrt(2) * zoom_coef * SCALE
+        )
         if not clip or any(
             (-MAX_SHAPE_DIM <= coord[0] <= WINDOW_W + MAX_SHAPE_DIM)
             and (-MAX_SHAPE_DIM <= coord[1] <= WINDOW_H + MAX_SHAPE_DIM)
