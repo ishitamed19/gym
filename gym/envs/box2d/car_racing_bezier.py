@@ -749,6 +749,9 @@ class CarRacingBezier(gym.Env, EzPickle):
         options: Optional[dict] = None,
     ):
         super().reset(seed=seed)
+        if self.fixed_environment:
+            self.seed(self.level_seed)
+
         self._destroy()
         self.reward = 0.0
         self.prev_reward = 0.0
@@ -756,6 +759,7 @@ class CarRacingBezier(gym.Env, EzPickle):
         self.t = 0.0
         self.new_lap = False
         self.road_poly = []
+        self.track_data = None
 
         if self.domain_randomize:
             randomize = True
@@ -765,17 +769,16 @@ class CarRacingBezier(gym.Env, EzPickle):
 
             self._reinit_colors(randomize)
 
-        while True:
-            success = self._create_track()
-            if success:
-                break
-            if self.verbose:
-                print(
-                    "retry to generate track (normal if there are not many"
-                    "instances of this message)"
-                )
-        self.car = Car(self.world, *self.track[0][1:4])
+        self.steps = 0
+        self._create_track()
+        beta0, x0, y0 = self.track[0][1:4]
+        x0 -= self.x_offset
+        y0 -= self.y_offset
+        self.car = Car(self.world, beta0, x0, y0)
 
+        self.goal_bin = None
+        self.reset_sparse_state()
+        
         self.renderer.reset()
         if not return_info:
             return self.step(None)[0]
