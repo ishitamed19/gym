@@ -216,7 +216,7 @@ class CarRacingBezier(gym.Env, EzPickle):
             "state_pixels",
             "single_rgb_array",
             "single_state_pixels",
-            "levels",
+            "level",
             "sketch"
         ],
         "render_fps": FPS,
@@ -907,7 +907,7 @@ class CarRacingBezier(gym.Env, EzPickle):
         # computing transformations
         angle = -self.car.hull.angle
         # Animating first second zoom.
-        if self.birdseye or mode in ['level, sketch']:
+        if self.birdseye or mode in ['level', 'sketch']:
             angle = 0
             zoom_coef = self.full_zoom
         else:
