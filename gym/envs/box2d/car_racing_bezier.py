@@ -913,12 +913,12 @@ class CarRacingBezier(gym.Env, EzPickle):
         else:
             zoom_coef = ZOOM
         if self.animate_zoom:
-            zoom = 0.1 * SCALE * max(1 - self.t, 0) + ZOOM * SCALE * min(self.t, 1)
+            zoom = 0.1 * SCALE * max(1 - self.t, 0) + zoom_coef * SCALE * min(self.t, 1)
         else:
             zoom = zoom_coef * SCALE
         scroll_x = -(self.car.hull.position[0]) * zoom
         scroll_y = -(self.car.hull.position[1]) * zoom
-        if self.birdseye:
+        if self.birdseye or mode in ['level', 'sketch']:
             trans = (WINDOW_W / 2, WINDOW_H / 2)
         else:
             trans = pygame.math.Vector2((scroll_x, scroll_y)).rotate_rad(angle)
@@ -957,6 +957,8 @@ class CarRacingBezier(gym.Env, EzPickle):
             return self._create_image_array(self.surf, (VIDEO_W, VIDEO_H))
         elif mode in {"state_pixels", "single_state_pixels", "sketch"}:
             return self._create_image_array(self.surf, (STATE_W, STATE_H))
+        elif mode == "level":
+            return self._create_image_array(self.surf, (WINDOW_W, WINDOW_H))
         else:
             return self.isopen
 
